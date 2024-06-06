@@ -765,6 +765,8 @@ fn sample(probabilities: TensorF32, inout coin :UInt64) -> Int:
 
 
 fn bpe_encode(inout tokens: List[Int], text: String, tok: Tokenizer):
+    if(len(text)):
+        tokens.append(tok.find(' '))
     for pos in range(len(text)):
         var char = text[pos]
         var id = tok.find(char)
