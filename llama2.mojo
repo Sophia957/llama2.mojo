@@ -737,12 +737,25 @@ fn transformer(
     # Classifier into logits
     matmul(state.logits, state.x, weights.wcls)
 
+fn random_u32(inout state: UInt64) ->UInt32:
+    #  xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    state ^= state >> 12
+    state ^= state << 25
+    state ^= state >> 27
+    return ((state * UInt64(0x2545F4914F6CDD1D)) >> 32).cast[DType.uint32]()
 
-fn sample(probabilities: TensorF32) -> Int:
+
+fn random_f32(inout state: UInt64) ->Float32 :
+    #   random float32 in [0,1)
+    return (random_u32(state) >> 8).cast[DType.float32]() / Float32(16777216.0)
+
+
+fn sample(probabilities: TensorF32, inout coin :UInt64) -> Int:
     var n = probabilities.dim(0)
     # Sample index from probabilities, they must sum to 1
     # get random value within (min, max) float32 range
-    var r = rand[DType.float32](1)
+    # var r = rand[DType.float32](1)
+    var r: Float32 = random_f32(coin)
     var cdf: Float32 = 0.0
     for i in range(n):
         cdf += probabilities[i]
@@ -818,7 +831,8 @@ fn main() raises:
     var temperature = 0.9
     var steps = 256
     var prompt = String("")
-    var rng_seed: Int = time.now()
+    #var rng_seed: Int = time.now()
+    var rng_seed: UInt64 = time.now()
     var print_config = 0
 
     @parameter
@@ -863,7 +877,7 @@ fn main() raises:
         return
 
     print("num parallel workers:", workers, " SIMD width:", nelts)
-    random.seed(rng_seed)
+    #random.seed(rng_seed)
     var config = Config(checkpoint, print_config == 1)
     var weights = TransformerWeights(checkpoint, config)
 
@@ -915,7 +929,7 @@ fn main() raises:
                 # Apply softmax to the logits to get the probabilities for the next token
                 softmax(state.logits)
                 # Sample from this distribution to get the next token
-                next_token = sample(state.logits)
+                next_token = sample(state.logits, rng_seed)
 
             # Finish generating when EOS, BOS appear
             if next_token == 1 or next_token == 2:
